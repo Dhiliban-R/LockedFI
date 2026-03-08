@@ -1,0 +1,1 @@
+pragma solidity ^0.8.20; import "forge-std/Test.sol"; import "../src/SmartVault.sol"; contract SmartVaultTest is Test { function testDeploy() public { SmartVault vault = new SmartVault(address(0), address(0), address(0)); } }
