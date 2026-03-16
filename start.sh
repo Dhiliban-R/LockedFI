@@ -90,8 +90,8 @@ RPC_URL="http://127.0.0.1:$ANVIL_PORT"
 PRIV_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 OWNER="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 AI_ADDR="0x4e507a4575d71c1E7EAAfaB9F6Ff0fde730DeD29"
-AI_PRIV_KEY="YOUR_AI_PRIVATE_KEY_HERE"
-GROQ_KEY="YOUR_GROQ_API_KEY_HERE"
+AI_PRIV_KEY="${AI_PRIVATE_KEY:-YOUR_AI_PRIV_KEY}"
+GROQ_KEY="${GROQ_API_KEY:-YOUR_GROQ_KEY}"
 
 cd "$PROJECT_ROOT/contracts"
 
@@ -130,8 +130,8 @@ import { ethers } from "ethers";
 export async function POST(req: Request) {
   try {
     const { txContext, userOpHash } = await req.json();
-    const groq = new Groq({ apiKey: "$GROQ_KEY" });
-    const aiPrivateKey = "$AI_PRIV_KEY";
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    const aiPrivateKey = process.env.AI_PRIVATE_KEY || "$AI_PRIV_KEY";
     const wallet = new ethers.Wallet(aiPrivateKey);
 
     const completion = await groq.chat.completions.create({

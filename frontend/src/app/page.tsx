@@ -24,9 +24,10 @@ export default function LockedFIDashboard() {
         checkBadgeStatus();
       } catch (err) {
         console.error("Connection failed", err);
+        alert("Wallet connection failed. Please try again.");
       }
     } else {
-      alert("Please install MetaMask!");
+      alert("No Web3 wallet detected. Please make sure Brave Wallet is enabled in Brave Settings.\n\nTo add local network in Brave Wallet:\n1. Open Brave Wallet\n2. Add Network\n3. Name: Localhost\n4. RPC URL: http://127.0.0.1:8545\n5. Chain ID: 31337");
     }
   };
 

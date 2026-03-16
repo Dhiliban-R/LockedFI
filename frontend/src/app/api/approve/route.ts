@@ -5,7 +5,7 @@ import { ethers } from "ethers";
 export async function POST(req: Request) {
   try {
     const { txContext, userOpHash } = await req.json();
-    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "YOUR_GROQ_API_KEY_HERE" });
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
     const aiPrivateKey = process.env.AI_PRIVATE_KEY || "0xabc123abc123abc123abc123abc123abc123abc123abc123abc123abc123abcd";
     const wallet = new ethers.Wallet(aiPrivateKey);
 

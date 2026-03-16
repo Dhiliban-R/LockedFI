@@ -1,63 +1,943 @@
 # Technical Specification: LockedFI Smart Vault
 
-**Version:** 1.0.0  
-**Status:** Prototype/Research  
-**Date:** March 8, 2026  
+**Version:** 1.0.0
+**Status:** Prototype/Research
+**Date:** March 2026
 **Subject:** AI-Augmented Decentralized Asset Management with Zero-Knowledge Verification
 
 ---
 
+## Table of Contents
+
+1. [Executive Summary](#1-executive-summary)
+2. [Problem Statement](#2-problem-statement)
+3. [System Architecture](#3-system-architecture)
+4. [Component Specifications](#4-component-specifications)
+5. [Operational Workflows](#5-operational-workflows)
+6. [Security Model](#6-security-model)
+7. [Data Structures](#7-data-structures)
+8. [API Specifications](#8-api-specifications)
+9. [Technical Requirements](#9-technical-requirements)
+10. [Testing & Validation](#10-testing--validation)
+11. [Performance Considerations](#11-performance-considerations)
+12. [Roadmap](#12-roadmap)
+
+---
+
 ## 1. Executive Summary
-LockedFI is a decentralized asset management protocol designed to mitigate risk in high-value transactions without compromising user privacy. By integrating Account Abstraction (ERC-4337), Large Language Model (LLM) reasoning, and ZK-SNARKs, LockedFI provides a "Proof-of-Safety" layer for the Ethereum ecosystem.
+
+LockedFI is a decentralized asset management protocol designed to mitigate risk in high-value transactions without compromising user privacy. By integrating **Account Abstraction (ERC-4337)**, **Large Language Model (LLM) reasoning**, and **ZK-SNARKs**, LockedFI provides a "Proof-of-Safety" layer for the Ethereum ecosystem.
+
+The protocol introduces three key innovations:
+
+1. **Contextual Security**: AI-driven transaction analysis that evaluates semantic intent beyond simple cryptographic signatures
+2. **Privacy-Preserving Compliance**: ZK-verified financial status that unlocks higher transaction limits without exposing sensitive data
+3. **Programmable Risk Mitigants**: Automated threshold enforcement with dynamic adjustment capabilities
+
+---
 
 ## 2. Problem Statement
-Traditional hardware wallets provide "cold" security but lack contextual awareness. Smart contract wallets offer programmability but often require complex, manual rule-setting. LockedFI addresses these gaps by introducing:
-1. **Contextual Security**: AI-driven transaction analysis.
-2. **Privacy-Preserving Compliance**: ZK-verified financial status.
-3. **Programmable Risk Mitigants**: Automated threshold enforcement.
+
+Traditional cryptocurrency storage and transaction methods face significant limitations:
+
+### 2.1 Hardware Wallet Limitations
+- Provide "cold" security but lack contextual awareness
+- Cannot evaluate transaction semantics
+- Rigid access control mechanisms
+- Poor integration with modern DeFi protocols
+
+### 2.2 Smart Contract Wallet Limitations
+- Require complex, manual rule-setting
+- Often lack intelligent risk assessment
+- Privacy concerns when implementing KYC/compliance features
+- Single point of failure in access control
+
+### 2.3 LockedFI Solution
+LockedFI addresses these gaps by introducing:
+- **Contextual Security**: AI-driven transaction analysis
+- **Privacy-Preserving Compliance**: ZK-verified financial status
+- **Programmable Risk Mitigants**: Automated threshold enforcement
+
+---
 
 ## 3. System Architecture
 
-### 3.1 On-Chain Layer (Ethereum/EVM)
-The core of the system is the `SmartVault.sol` contract, which acts as a programmable account.
-- **Access Control**: Implements a multi-signature validation logic where `signature_length == 130` (65 bytes Owner + 65 bytes AI).
-- **Verification Engine**: Interfaces with `IVerifier` to validate Groth16 proofs.
-- **Risk Engine**: Enforces a `RISK_LIMIT` (default 0.1 ETH). Transactions exceeding this limit trigger mandatory ZK-Badge checks and AI co-signing.
+### 3.1 High-Level Architecture
 
-### 3.2 Intelligence Layer (AI Guardian)
+The system operates on three distinct layers:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    PRESENTATION LAYER                        │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │  Browser    │  │  Wallet     │  │  ZK Circuit │         │
+│  │  Dashboard  │  │  Extension  │  │  (Local)    │         │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘         │
+└─────────┼─────────────────┼─────────────────┼────────────────┘
+          │                 │                 │
+          ▼                 ▼                 ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    API LAYER (Next.js)                       │
+│  ┌───────────────────────────────────────────────────┐     │
+│  │  /api/approve - AI Integration Endpoint           │     │
+│  │  /api/vault - Vault State Management              │     │
+│  └───────────────────────────────────────────────────┘     │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│              INTELLIGENCE LAYER (Python)                    │
+│  ┌───────────────────────────────────────────────────┐     │
+│  │  AI Guardian Service                              │     │
+│  │  - Groq Llama-3.3-70b Model                       │     │
+│  │  - Transaction Context Analysis                   │     │
+│  │  - Deterministic Decision Making                  │     │
+│  │  - Cryptographic Signing                          │     │
+│  └───────────────────────────────────────────────────┘     │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│               BLOCKCHAIN LAYER (EVM)                        │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
+│  │ SmartVault  │  │  Verifier   │  │  EntryPoint  │        │
+│  │  .sol       │  │  .sol       │  │  (ERC-4337)  │        │
+│  └─────────────┘  └─────────────┘  └─────────────┘        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 3.2 Component Interaction Flow
+
+1. **User Request**: Browser → Wallet → Frontend
+2. **AI Analysis**: Frontend → API → AI Guardian → Decision
+3. **ZK Verification**: Browser → Local Circuit → Proof → Smart Contract
+4. **Execution**: Dual Signatures → Smart Contract → Blockchain
+
+---
+
+## 4. Component Specifications
+
+### 4.1 On-Chain Layer (SmartVault.sol)
+
+The core smart contract implements a programmable account with multi-signature validation.
+
+#### 4.1.1 State Variables
+
+```solidity
+address public owner;              // Vault owner address
+address public aiGuardian;         // AI co-signer address
+address public verifier;          // ZK verifier contract
+uint256 public constant RISK_LIMIT = 0.1 ether;
+bool public hasHighIncomeBadge;    // ZK-verified status
+```
+
+#### 4.1.2 Key Functions
+
+**validateUserOp(bytes32 userOpHash, bytes calldata signature)**
+
+Validates ERC-4337 user operations with dual-signature support:
+
+- **Input**: Transaction hash and signature(s)
+- **Signature Formats**:
+  - 65 bytes: Owner only (for low-value transactions)
+  - 130 bytes: Owner (65) + AI Guardian (65) (for high-value)
+- **Output**: Validation result (0 = valid, 1 = invalid)
+
+```solidity
+function validateUserOp(bytes32 userOpHash, bytes calldata signature)
+    external view returns (uint256 validationData)
+```
+
+**verifyIncome(uint[2] a, uint[2][2] b, uint[2] c, uint[2] input)**
+
+Verifies ZK-SNARK proof of income:
+
+- **Input**: Groth16 proof components
+- **Effect**: Sets `hasHighIncomeBadge = true` if proof valid
+- **Privacy**: Only proof validation, no raw data storage
+
+```solidity
+function verifyIncome(uint[2] calldata a, uint[2][2] calldata b,
+                      uint[2] calldata c, uint[2] calldata input) external
+```
+
+**execute(address dest, uint256 value, bytes calldata func)**
+
+Executes transactions with risk limit enforcement:
+
+- **Precondition**: Valid signatures and sufficient balance
+- **Risk Check**: Requires `hasHighIncomeBadge` if `value > RISK_LIMIT`
+- **Access**: Only EntryPoint or Owner can call
+
+```solidity
+function execute(address dest, uint256 value, bytes calldata func) external
+```
+
+### 4.2 Intelligence Layer (AI Guardian)
+
 A Python-based middleware service utilizing the Groq inference engine.
-- **Model**: Llama-3.3-70b-versatile.
-- **Objective**: Analyze the semantic intent of a transaction (e.g., "Withdraw 5 ETH to unknown address") against the user's historical patterns and badge status.
-- **Action**: Outputs a deterministic `APPROVE` or `REJECT` decision followed by a cryptographic signature on success.
 
-### 3.3 Privacy Layer (Zero-Knowledge)
-A ZK-SNARK circuit built with Circom.
-- **Public Inputs**: Verification keys and result status.
-- **Private Inputs**: User's raw financial data (income/balance).
-- **Result**: Generates a proof that the user meets the "High-Income" threshold without disclosing the actual balance.
+#### 4.2.1 Model Configuration
 
-## 4. Operational Workflows
+- **Model**: `llama-3.3-70b-versatile`
+- **Temperature**: 0 (deterministic output)
+- **Provider**: Groq (high-speed inference)
 
-### 4.1 Transaction Lifecycle
-1. **Initialization**: User requests a transaction via the Frontend.
-2. **Local Signing**: User's private key signs the `UserOperation` hash.
-3. **AI Interception**: The Next.js API route forwards the hash and context to the AI Guardian.
-4. **Contextual Analysis**: AI evaluates risk and co-signs if safe.
-5. **On-Chain Validation**: `SmartVault` verifies both signatures and checks the `hasHighIncomeBadge` mapping.
-6. **Execution**: If all conditions pass, the transaction is executed.
+#### 4.2.2 Decision Logic
 
-## 5. Security Model
-- **Trust Assumption**: The AI Guardian is a trusted co-signer in this prototype. Future iterations will explore Decentralized AI (DeAI) or TEE-based (Trusted Execution Environment) signing.
-- **Encryption**: All communication between the frontend and the AI service is conducted via HTTPS.
-- **Failure Modes**: If the AI service is offline, the vault defaults to a restricted state where only low-value transactions are permitted.
+The AI Guardian evaluates transactions based on:
 
-## 6. Technical Requirements
-- **Runtime**: Node.js v20.x, Python 3.11+.
-- **Blockchain**: EVM-compatible chain (Anvil for local development).
-- **Tooling**: Foundry (Forge/Cast), SnarkJS, Circom.
+```python
+def evaluate_transaction(context):
+    """
+    Context includes:
+    - Transaction amount
+    - Destination address
+    - User's badge status
+    - Historical patterns
+    - Time of day
+    - Known malicious addresses
+    """
 
-## 7. Roadmap
-- **Phase 1**: Prototype development (Current).
-- **Phase 2**: Multi-agent consensus for the Guardian layer.
-- **Phase 3**: Dynamic risk limits based on on-chain volatility.
-- **Phase 4**: Mainnet-ready security audit and KMS integration.
+    # Risk indicators
+    risk_factors = {
+        'amount_exceeds_limit': context.amount > RISK_LIMIT,
+        'unknown_recipient': not is_known_address(context.recipient),
+        'suspicious_timing': is_unusual_time(context.timestamp),
+        'rapid_transactions': check_velocity(context.user_address)
+    }
+
+    # Decision making
+    if risk_factors['amount_exceeds_limit'] and not context.has_badge:
+        return "REJECT: Insufficient ZK verification"
+
+    if risk_factors['unknown_recipient'] and risk_factors['suspicious_timing']:
+        return "REJECT: Suspicious transaction pattern"
+
+    return "APPROVE: Transaction within safe parameters"
+```
+
+#### 4.2.3 Signature Generation
+
+```python
+def sign_transaction_hash(tx_hash_hex):
+    """
+    Signs transaction hash with AI Guardian private key
+    Returns 65-byte signature compatible with ECDSA
+    """
+    message = encode_defunct(hexstr=tx_hash_hex)
+    signed_message = Account.sign_message(message, private_key=ai_private_key)
+    return signed_message.signature.hex()
+```
+
+### 4.3 Privacy Layer (ZK-SNARKs)
+
+A ZK-SNARK circuit built with Circom using Groth16 proving system.
+
+#### 4.3.1 Circuit Specification
+
+**High-Income Verification Circuit**
+
+```circom
+template IncomeVerifier() {
+    // Private inputs
+    signal input userIncome;
+    signal input userBalance;
+
+    // Public inputs
+    signal output hasHighIncome;
+    signal output hasMinimumBalance;
+
+    // Thresholds
+    var INCOME_THRESHOLD = 100000;  // $100,000
+    var BALANCE_THRESHOLD = 10000;  // $10,000
+
+    // Verify income threshold
+    hasHighIncome <== userIncome >= INCOME_THRESHOLD;
+
+    // Verify balance threshold
+    hasMinimumBalance <== userBalance >= BALANCE_THRESHOLD;
+}
+```
+
+#### 4.3.2 Proof Generation
+
+```javascript
+async function generateZKProof(income, balance) {
+    // Generate proof locally in browser
+    const { proof, publicSignals } = await snarkjs.groth16.fullProve(
+        {
+            userIncome: income,
+            userBalance: balance
+        },
+        "income_verifier.wasm",
+        "income_verifier_final.zkey"
+    );
+
+    return {
+        proof: proof,
+        publicSignals: publicSignals
+    };
+}
+```
+
+### 4.4 Frontend Layer (Next.js 15)
+
+React-based dashboard with TypeScript and TailwindCSS.
+
+#### 4.4.1 Key Components
+
+**LockedFIDashboard**: Main application component
+- Wallet connection management
+- Balance and badge status display
+- Transaction initiation interface
+- Real-time status updates
+
+**API Routes**:
+- `/api/approve`: AI Guardian integration endpoint
+- `/api/vault`: Vault state management
+
+#### 4.4.2 State Management
+
+```typescript
+interface VaultState {
+  account: string | null;
+  hasBadge: boolean;
+  balance: string;
+  riskLimit: string;
+  status: string;
+  loading: boolean;
+}
+```
+
+---
+
+## 5. Operational Workflows
+
+### 5.1 Transaction Lifecycle
+
+#### Phase 1: Initialization
+```
+User → Connect Wallet → Dashboard loads vault state
+```
+
+#### Phase 2: Verification (if needed)
+```
+User → Generate ZK Proof → Submit to SmartVault → Badge granted
+```
+
+#### Phase 3: Transaction Request
+```
+User → Enter amount → Dashboard generates tx hash
+```
+
+#### Phase 4: Owner Signing
+```
+Dashboard → Request signature → Wallet popup → Owner signs (65 bytes)
+```
+
+#### Phase 5: AI Analysis
+```
+Dashboard → Send context to API → AI analyzes → Approves/Rejects
+```
+
+#### Phase 6: AI Signing (if approved)
+```
+API → AI Guardian → Signs tx hash (65 bytes) → Returns signature
+```
+
+#### Phase 7: Signature Bundling
+```
+Dashboard → Combine signatures (130 bytes) → Prepare execution
+```
+
+#### Phase 8: On-Chain Validation
+```
+Dashboard → Call SmartVault.execute() → Contract validates
+```
+
+#### Phase 9: Execution
+```
+SmartVault → Transfer funds → Transaction confirmed → User notified
+```
+
+### 5.2 Error Handling
+
+| Error | Description | Recovery |
+|-------|-------------|----------|
+| `Wallet connection failed` | Wallet not detected or rejected | Retry connection, check wallet extension |
+| `AI Guardian offline` | Service unavailable | Fall back to risk-limited mode |
+| `ZK proof invalid` | Circuit verification failed | Regenerate proof with correct inputs |
+| `Insufficient balance` | Not enough funds in vault | Add more funds or reduce amount |
+| `Badge required` | Exceeds risk limit without badge | Generate and submit ZK proof |
+
+---
+
+## 6. Security Model
+
+### 6.1 Trust Assumptions
+
+**Trusted Components (Prototype)**:
+- AI Guardian service
+- Smart contract integrity
+- Browser environment
+
+**Semi-Trusted**:
+- User's wallet (assumed not compromised)
+- Blockchain network (assumed secure)
+
+**Untrusted**:
+- Network communication (protected by TLS)
+- External services (no sensitive data shared)
+
+### 6.2 Security Properties
+
+#### 6.2.1 Integrity
+- Dual-signature validation ensures both owner and AI agree
+- ZK proofs provide mathematical guarantee of statements
+- Smart contract immutability enforces rules
+
+#### 6.2.2 Confidentiality
+- Raw income data never leaves user's device
+- Only ZK proofs (not underlying data) are stored on-chain
+- AI Guardian receives only transaction context, not private keys
+
+#### 6.2.3 Availability
+- Smart contract always available (on-chain)
+- AI Guardian has fallback mechanisms
+- Multiple execution paths for different scenarios
+
+### 6.3 Threat Analysis
+
+#### 6.3.1 Known Threats
+
+| Threat | Impact | Mitigation |
+|--------|--------|------------|
+| Private key compromise | High | Use hardware wallet for owner key |
+| AI service outage | Medium | Fallback to limited transactions |
+| Smart contract bug | Critical | Audit before deployment |
+| Frontend XSS | Medium | CSP headers, input sanitization |
+| Network MITM | Low | HTTPS/TLS for all communications |
+
+#### 6.3.2 Attack Vectors
+
+**Signature Replay Attack**
+- **Mitigation**: Unique transaction hashes with timestamps
+
+**Front-Running**
+- **Mitigation**: Transaction context includes timestamps
+
+**AI Prompt Injection**
+- **Mitigation**: Strict prompt engineering, temperature=0
+
+**ZK Proof Forgery**
+- **Mitigation**: Cryptographic proof system ensures impossibility
+
+### 6.4 Encryption & Communication
+
+- **Frontend ↔ API**: HTTPS/TLS 1.3
+- **API ↔ AI Guardian**: HTTPS/TLS 1.3
+- **Frontend ↔ Blockchain**: Wallet provider's secure connection
+- **Local ZK Proof**: Client-side generation, no network transmission
+
+---
+
+## 7. Data Structures
+
+### 7.1 Smart Contract Data
+
+```solidity
+// Vault State
+struct VaultState {
+    address owner;
+    address aiGuardian;
+    address verifier;
+    uint256 balance;
+    bool hasHighIncomeBadge;
+    uint256 riskLimit;
+}
+
+// User Operation (ERC-4337 compatible)
+struct UserOperation {
+    address sender;
+    uint256 nonce;
+    bytes initCode;
+    bytes callData;
+    uint256 callGasLimit;
+    uint256 verificationGasLimit;
+    uint256 preVerificationGas;
+    uint256 maxFeePerGas;
+    uint256 maxPriorityFeePerGas;
+    bytes paymasterAndData;
+    bytes signature;
+}
+
+// ZK Proof Components
+struct ZKProof {
+    uint[2] a;              // π_a
+    uint[2][2] b;           // π_b
+    uint[2] c;              // π_c
+    uint[2] publicInputs;   // Public signals
+}
+```
+
+### 7.2 API Data Structures
+
+```typescript
+// Transaction Request
+interface TransactionRequest {
+    txContext: string;      // Human-readable description
+    userOpHash: string;     // Transaction hash
+    amount: string;         // Amount in ETH
+    recipient: string;      // Destination address
+}
+
+// AI Response
+interface AIResponse {
+    approved: boolean;
+    signature?: string;     // AI's signature (if approved)
+    decision: string;       // Detailed reasoning
+    error?: string;         // Error message (if any)
+}
+
+// Vault Status
+interface VaultStatus {
+    address: string;
+    balance: string;
+    hasBadge: boolean;
+    owner: string;
+    riskLimit: string;
+}
+
+// ZK Proof
+interface ZKProof {
+    proof: {
+        pi_a: [string, string];
+        pi_b: [[string, string], [string, string]];
+        pi_c: [string, string];
+    };
+    publicSignals: [string, string];
+}
+```
+
+### 7.3 AI Analysis Context
+
+```python
+# Transaction Context for AI
+TransactionContext = {
+    'user_address': '0x...',           # User's wallet address
+    'recipient_address': '0x...',      # Destination address
+    'amount': 0.05,                    # ETH amount
+    'currency': 'ETH',                 # Token type
+    'has_badge': True,                 # ZK badge status
+    'timestamp': 1709894400,           # Unix timestamp
+    'transaction_type': 'withdrawal',  # Operation type
+    'previous_transactions': [...],     # Recent history
+    'known_addresses': [...]           # Whitelisted addresses
+}
+```
+
+---
+
+## 8. API Specifications
+
+### 8.1 Frontend API Endpoints
+
+#### POST /api/approve
+
+**Description**: Requests AI Guardian approval for a transaction
+
+**Request Body**:
+```json
+{
+  "txContext": "User 0x123... wants to withdraw 0.05 ETH.",
+  "userOpHash": "0x1234567890abcdef..."
+}
+```
+
+**Response (Success)**:
+```json
+{
+  "approved": true,
+  "signature": "0xabcdef123456...",
+  "decision": "APPROVE: Transaction within safe parameters"
+}
+```
+
+**Response (Rejection)**:
+```json
+{
+  "approved": false,
+  "decision": "REJECT: Suspicious transaction pattern"
+}
+```
+
+**Response (Error)**:
+```json
+{
+  "error": "AI Guardian service unavailable",
+  "code": 500
+}
+```
+
+#### GET /api/vault/status
+
+**Description**: Retrieves current vault status
+
+**Response**:
+```json
+{
+  "address": "0x456...",
+  "balance": "1.5",
+  "hasBadge": true,
+  "owner": "0x789...",
+  "riskLimit": "0.1"
+}
+```
+
+### 8.2 Smart Contract ABI
+
+```solidity
+// Read Functions
+function owner() view returns (address)
+function aiGuardian() view returns (address)
+function verifier() view returns (address)
+function hasHighIncomeBadge() view returns (bool)
+function RISK_LIMIT() view returns (uint256)
+
+// Write Functions
+function verifyIncome(uint[2] a, uint[2][2] b, uint[2] c, uint[2] input) external
+function execute(address dest, uint256 value, bytes calldata func) external
+function validateUserOp(bytes32 userOpHash, bytes calldata signature) external view returns (uint256)
+```
+
+### 8.3 Events
+
+```solidity
+event IncomeVerified(address indexed user, bool hasHighIncome);
+event TransactionExecuted(address indexed user, address indexed recipient, uint256 amount);
+event RiskLimitExceeded(address indexed user, uint256 amount, uint256 limit);
+```
+
+---
+
+## 9. Technical Requirements
+
+### 9.1 Runtime Requirements
+
+#### 9.1.1 Development Environment
+- **Node.js**: v18.x or higher
+- **Python**: v3.10 or higher
+- **Foundry**: Latest stable release
+- **Git**: v2.0 or higher
+
+#### 9.1.2 Production Environment
+- **Node.js**: v20.x LTS
+- **Python**: v3.11 or higher
+- **EVM-compatible Chain**: Ethereum mainnet or L2
+- **RDBMS**: For transaction history (optional)
+
+### 9.2 Blockchain Requirements
+
+#### 9.1.1 Contract Deployment
+- **Gas Limit**: ~5,000,000 (SmartVault + Verifier)
+- **Deployment Cost**: ~0.02 ETH (on mainnet)
+- **Block Confirmation**: 12 blocks recommended
+
+#### 9.1.2 Transaction Execution
+- **Gas per Transaction**: ~50,000 - 100,000
+- **Transaction Cost**: Variable based on gas price
+- **Confirmation Time**: 12-30 seconds (mainnet)
+
+### 9.3 Hardware Requirements
+
+#### 9.3.1 Development
+- **CPU**: 4 cores minimum
+- **RAM**: 8GB minimum
+- **Storage**: 10GB available space
+- **Network**: Broadband connection
+
+#### 9.3.2 Production
+- **CPU**: 8 cores recommended
+- **RAM**: 16GB recommended
+- **Storage**: 100GB available space
+- **Network**: High-speed, low-latency connection
+
+### 9.4 Software Dependencies
+
+#### 9.4.1 Frontend
+```json
+{
+  "next": "^15.0.0",
+  "react": "^18.0.0",
+  "typescript": "^5.0.0",
+  "tailwindcss": "^4.0.0",
+  "ethers": "^6.0.0",
+  "lucide-react": "^0.300.0"
+}
+```
+
+#### 9.4.2 AI Guardian
+```python
+groq>=0.5.0
+eth-account>=0.10.0
+python-dotenv>=1.0.0
+web3>=6.0.0
+```
+
+#### 9.4.3 Smart Contracts
+```toml
+[dependencies]
+openzeppelin = "^5.0.0"
+forge-std = "^1.8.0"
+```
+
+---
+
+## 10. Testing & Validation
+
+### 10.1 Test Coverage
+
+#### 10.1.1 Smart Contract Tests
+
+```solidity
+// Test: Dual signature validation
+function testDualSignatureValidation() public {
+    bytes32 hash = keccak256("test");
+    bytes memory ownerSig = sign(owner, hash);
+    bytes memory aiSig = sign(aiGuardian, hash);
+    bytes memory combined = bytes.concat(ownerSig, aiSig);
+
+    uint256 result = vault.validateUserOp(hash, combined);
+    assertEq(result, 0); // Should succeed
+}
+
+// Test: Risk limit enforcement
+function testRiskLimitEnforcement() public {
+    vm.startPrank(owner);
+    vm.expectRevert("Risk too high");
+    vault.execute(recipient, 0.5 ether, "0x"); // Exceeds limit
+    vm.stopPrank();
+}
+
+// Test: ZK income verification
+function testZKIncomeVerification() public {
+    vm.startPrank(owner);
+    vault.verifyIncome(proof.a, proof.b, proof.c, proof.input);
+    assertTrue(vault.hasHighIncomeBadge());
+    vm.stopPrank();
+}
+```
+
+#### 10.1.2 AI Guardian Tests
+
+```python
+# Test: Safe transaction approval
+def test_safe_transaction_approval():
+    context = "User withdrawing 0.05 ETH. Known recipient. Normal time."
+    result = get_ai_decision(context)
+    assert "APPROVE" in result
+
+# Test: Suspicious transaction rejection
+def test_suspicious_transaction_rejection():
+    context = "User withdrawing 10 ETH to unknown address at 3 AM"
+    result = get_ai_decision(context)
+    assert "REJECT" in result
+
+# Test: Signature generation
+def test_signature_generation():
+    tx_hash = "0x1234567890abcdef..."
+    signature = sign_transaction_hash(tx_hash)
+    assert len(signature) == 130  # 65 bytes hex = 130 chars
+```
+
+#### 10.1.3 Frontend Tests
+
+```typescript
+// Test: Wallet connection
+test('connects wallet successfully', async () => {
+  render(<LockedFIDashboard />);
+  fireEvent.click(screen.getByText('Connect Wallet'));
+  await waitFor(() => {
+    expect(screen.getByText(/0x[a-fA-F0-9]{4}\.\.\.[a-fA-F0-9]{4}/)).toBeInTheDocument();
+  });
+});
+
+// Test: AI approval flow
+test('requests AI approval for transaction', async () => {
+  const response = await fetch('/api/approve', {
+    method: 'POST',
+    body: JSON.stringify({ txContext: '...', userOpHash: '...' })
+  });
+  const data = await response.json();
+  expect(data).toHaveProperty('approved');
+});
+```
+
+### 10.2 Validation Criteria
+
+| Component | Metric | Target |
+|-----------|--------|--------|
+| Smart Contracts | Test Coverage | >90% |
+| Smart Contracts | Gas Optimization | <100k per transaction |
+| AI Guardian | Response Time | <2 seconds |
+| Frontend | Lighthouse Score | >90 |
+| Frontend | Page Load | <2 seconds |
+| ZK Circuit | Proof Generation | <5 seconds |
+
+### 10.3 Security Audit Checklist
+
+- [ ] Smart contract code review
+- [ ] Reentrancy attack prevention
+- [ ] Integer overflow/underflow checks
+- [ ] Access control validation
+- [ ] Frontend XSS prevention
+- [ ] API rate limiting
+- [ ] Input validation and sanitization
+- [ ] Secure key management
+- [ ] ZK proof verification correctness
+- [ ] AI prompt injection prevention
+
+---
+
+## 11. Performance Considerations
+
+### 11.1 Gas Optimization
+
+#### 11.1.1 Storage Optimization
+- Use `uint256` instead of smaller types for gas efficiency
+- Pack struct variables where possible
+- Use `calldata` instead of `memory` for external function parameters
+
+#### 11.1.2 Execution Optimization
+- Batch operations where possible
+- Minimize external calls
+- Use events for off-chain data instead of storage
+
+### 11.2 Latency Considerations
+
+| Operation | Expected Latency | Optimization Strategy |
+|-----------|------------------|----------------------|
+| AI Analysis | 1-3 seconds | Use faster model, caching |
+| ZK Proof Generation | 3-10 seconds | WebAssembly optimization |
+| Block Confirmation | 12-30 seconds | Use L2 for faster finality |
+| API Response | <500ms | CDN, edge computing |
+
+### 11.3 Scalability
+
+#### 11.3.1 Vertical Scaling
+- Increase AI Guardian compute resources
+- Optimize ZK proof generation
+- Upgrade server hardware
+
+#### 11.3.2 Horizontal Scaling
+- Deploy multiple AI Guardian instances
+- Load balance API requests
+- Use L2 networks for transactions
+
+---
+
+## 12. Roadmap
+
+### Phase 1: Prototype ✅ (Current)
+- [x] Basic dual-signature validation
+- [x] ZK-income verification circuit
+- [x] AI Guardian service
+- [x] Demo dashboard
+- [x] Local deployment script
+
+### Phase 2: Enhancement
+- [ ] Multi-agent consensus for Guardian layer
+- [ ] Dynamic risk limits based on on-chain volatility
+- [ ] Enhanced ZK circuits for multiple badge types
+- [ ] Historical transaction analysis
+- [ ] Improved AI decision-making with ML models
+
+### Phase 3: Production Readiness
+- [ ] Mainnet deployment
+- [ ] Security audit by external firm
+- [ ] KMS integration for key management
+- [ ] TEE-based AI Guardian deployment
+- [ ] Gas optimization and cost reduction
+- [ ] Recovery mechanisms for lost access
+- [ ] Mobile application (iOS/Android)
+
+### Phase 4: Ecosystem Expansion
+- [ ] Support for multiple blockchain networks
+- [ ] Integration with popular wallets (MetaMask, Coinbase Wallet)
+- [ ] Community governance features (DAO integration)
+- [ ] DeFi protocol integrations (DEX, lending)
+- [ ] NFT-based badge system
+- [ ] Institutional features (whitelisting, compliance)
+
+### Future Research Directions
+
+1. **Decentralized AI**: Explore fully decentralized AI consensus mechanisms
+2. **Advanced ZK**: Implement recursive ZK proofs for complex verification
+3. **Cross-Chain**: Extend protocol to multi-chain environments
+4. **Privacy-Enhancing**: Implement confidential transactions
+5. **Social Recovery**: Implement social account recovery mechanisms
+
+---
+
+## Appendix
+
+### A. Configuration Files
+
+#### A.1 Foundry Configuration (foundry.toml)
+
+```toml
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc_version = "0.8.19"
+optimizer = true
+optimizer_runs = 200
+
+[rpc_endpoints]
+localhost = "http://127.0.0.1:8545"
+```
+
+#### A.2 Environment Variables (.env)
+
+```env
+# Groq API Configuration
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=llama-3.3-70b-versatile
+
+# Blockchain Configuration
+RPC_URL=http://127.0.0.1:8545
+CHAIN_ID=31337
+
+# AI Guardian Configuration
+PRIVATE_KEY=0xabc123abc123abc123abc123abc123abc123abc123abc123abc123abc123abcd
+AI_ADDRESS=0x4e507a4575d71c1E7EAAfaB9F6Ff0fde730DeD29
+
+# Vault Configuration
+OWNER_ADDRESS=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+RISK_LIMIT=0.1
+```
+
+### B. Known Issues & Limitations
+
+1. **AI Guardian Centralization**: Current implementation uses a single AI service
+2. **ZK Proof Size**: Groth16 proofs are relatively large (128 bytes)
+3. **Gas Costs**: Dual-signature validation increases transaction costs
+4. **Latency**: AI analysis adds 1-3 seconds to transaction time
+5. **Badge Revocation**: No mechanism to revoke ZK badges once granted
+
+### C. References & Resources
+
+1. [ERC-4337: Account Abstraction](https://eips.ethereum.org/EIPS/eip-4337)
+2. [Groth16 Proof System](https://eprint.iacr.org/2016/260)
+3. [Circom Documentation](https://docs.circom.io/)
+4. [SnarkJS Library](https://github.com/iden3/snarkjs)
+5. [Foundry Book](https://book.getfoundry.sh/)
+6. [Groq Documentation](https://console.groq.com/docs)
+
+---
+
+**Document Version**: 1.0.0
+**Last Updated**: March 2026
+**Maintained By**: LockedFI Development Team
