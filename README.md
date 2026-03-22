@@ -40,8 +40,8 @@ LockedFI operates as a three-tier security sandwich:
 3. **The Execution Layer (EVM)**: The `SmartVault` contract enforces the logic. It checks signature lengths, validates ZK proofs, and handles the atomic transfer of funds.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         USER LAYER                              │
+┌────────────────────────────────────────────────────────────────┐
+│                         USER LAYER                             │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
 │  │   Wallet     │  │  Dashboard   │  │  ZK Circuit  │          │
 │  │  (MetaMask)  │  │  (Next.js)   │  │   (Circom)   │          │
@@ -50,16 +50,16 @@ LockedFI operates as a three-tier security sandwich:
           │                 │                 │
           │                 │                 │
 ┌─────────┼─────────────────┼─────────────────┼──────────────────┐
-│         ▼                 ▼                 ▼                  │
-│                     NEXT.JS API LAYER                            │
+│         ▼                ▼                 ▼                  │
+│                     NEXT.JS API LAYER                          │
 │  ┌──────────────────────────────────────────────────┐          │
 │  │      /api/approve (AI Integration Endpoint)      │          │
 │  └────────────────────┬─────────────────────────────┘          │
 └───────────────────────┼────────────────────────────────────────┘
                         │
                         ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                       AI GUARDIAN LAYER                          │
+┌────────────────────────────────────────────────────────────────┐
+│                       AI GUARDIAN LAYER                        │
 │  ┌──────────────────────────────────────────────────┐          │
 │  │    Python Service (guardian_service.py)          │          │
 │  │    - Groq Llama-3.3-70b Model                    │          │
@@ -67,20 +67,20 @@ LockedFI operates as a three-tier security sandwich:
 │  │    - Deterministic APPROVE/REJECT Decision       │          │
 │  │    - Cryptographic Signature Generation          │          │
 │  └──────────────────────────────────────────────────┘          │
-└─────────────────────────────────────────────────────────────────┘
+└────────────────────────────────────────────────────────────────┘
                         │
                         ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      BLOCKCHAIN LAYER                           │
-│  ┌──────────────────┐  ┌──────────────────────────────────┐    │
-│  │   SmartVault     │  │    Groth16Verifier               │    │
+┌───────────────────────────────────────────────────────────────┐
+│                      BLOCKCHAIN LAYER                         │
+│  ┌──────────────────┐  ┌─────────────────────────────────┐    │
+│  │   SmartVault     │  │    Groth16Verifier              │    │
 │  │   .sol           │  │    .sol                         │    │
 │  │                  │  │                                 │    │
 │  │ - Dual Sig Logic │  │ - ZK Proof Validation           │    │
 │  │ - Risk Limits    │  │ - Income Badge Verification     │    │
 │  │ - Execution      │  │                                 │    │
-│  └──────────────────┘  └──────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────┘
+│  └──────────────────┘  └─────────────────────────────────┘    │
+└───────────────────────────────────────────────────────────────┘
 ```
 
 ## 🛠️ Tech Stack
