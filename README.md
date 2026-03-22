@@ -50,7 +50,7 @@ LockedFI operates as a three-tier security sandwich:
           │                 │                 │
           │                 │                 │
 ┌─────────┼─────────────────┼─────────────────┼──────────────────┐
-│         ▼                ▼                 ▼                  │
+│         ▼                ▼                 ▼                   │
 │                     NEXT.JS API LAYER                          │
 │  ┌──────────────────────────────────────────────────┐          │
 │  │      /api/approve (AI Integration Endpoint)      │          │
