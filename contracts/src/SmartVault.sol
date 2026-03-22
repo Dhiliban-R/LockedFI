@@ -61,13 +61,30 @@ contract SmartVault {
     function execute(address dest, uint256 value, bytes calldata func) external {
         // ALLOW EITHER THE ENTRYPOINT OR THE OWNER TO CALL THIS FOR THE DEMO
         require(msg.sender == address(0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789) || msg.sender == owner, "Only EntryPoint or Owner");
-        
+
         if (value > RISK_LIMIT) {
             require(hasHighIncomeBadge, "Risk too high: ZK-Income Badge required");
         }
 
-        (bool success,) = dest.call{value: value}(func);
-        require(success, "Execution failed");
+        // Check if destination is a contract or EOA
+        uint256 size;
+        assembly {
+            size := extcodesize(dest)
+        }
+
+        if (size > 0) {
+            // Dest is a contract, use call
+            (bool success,) = dest.call{value: value}(func);
+            require(success, "Contract execution failed");
+        } else {
+            // Dest is an EOA, use transfer (standard ETH transfer)
+            if (value > 0) {
+                (bool success,) = dest.call{value: value}("");
+                require(success, "ETH transfer failed");
+            }
+            // If func data is provided but dest is EOA, we can't execute it
+            // This is expected behavior for simple ETH transfers
+        }
     }
 
     receive() external payable {}

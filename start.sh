@@ -13,6 +13,17 @@ BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# Anvil State Persistence
+STATE_FILE="$PROJECT_ROOT/.anvil_state.json"
+
+# Check for reset flag
+if [[ "$1" == "--reset" ]]; then
+    echo -e "${RED}🧹 Resetting system state...${NC}"
+    rm -f "$STATE_FILE"
+    rm -rf "$PROJECT_ROOT/frontend/.next"
+    echo -e "${GREEN}✅ State cleared.${NC}"
+fi
+
 echo -e "${BLUE}================================================${NC}"
 echo -e "${GREEN}      LockedFI: AI-Guarded ZK-Smart Vault      ${NC}"
 echo -e "${BLUE}================================================${NC}"
@@ -74,7 +85,9 @@ echo -e "${GREEN}✅ Packages installed.${NC}"
 echo -e "
 ${BLUE}Step 3: Launching Local Blockchain...${NC}"
 pkill -f anvil 2>/dev/null || true
-anvil --port $ANVIL_PORT --silent > /dev/null 2>&1 &
+
+# Use --state to persist block number and nonces (Prevents Brave/MetaMask reset requirement)
+anvil --port $ANVIL_PORT --state "$STATE_FILE" --silent > /dev/null 2>&1 &
 ANVIL_PID=$!
 
 # Wait for Anvil to be ready
@@ -89,8 +102,11 @@ ${BLUE}Step 4: Deploying Smart Contracts...${NC}"
 RPC_URL="http://127.0.0.1:$ANVIL_PORT"
 PRIV_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 OWNER="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-AI_ADDR="0x4e507a4575d71c1E7EAAfaB9F6Ff0fde730DeD29"
-AI_PRIV_KEY="${AI_PRIVATE_KEY:-YOUR_AI_PRIV_KEY}"
+
+# AI Guardian Setup (Default to Anvil Account #1 if not set)
+# Private Key: 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
+AI_PRIV_KEY="${AI_PRIVATE_KEY:-0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d}"
+AI_ADDR="0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
 GROQ_KEY="${GROQ_API_KEY:-YOUR_GROQ_KEY}"
 
 cd "$PROJECT_ROOT/contracts"
@@ -130,9 +146,26 @@ import { ethers } from "ethers";
 export async function POST(req: Request) {
   try {
     const { txContext, userOpHash } = await req.json();
+    
+    if (!process.env.GROQ_API_KEY || process.env.GROQ_API_KEY === "YOUR_GROQ_KEY") {
+      return NextResponse.json({ 
+        approved: false, 
+        error: "GROQ_API_KEY is missing. Please set it in your environment." 
+      }, { status: 500 });
+    }
+
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
     const aiPrivateKey = process.env.AI_PRIVATE_KEY || "$AI_PRIV_KEY";
-    const wallet = new ethers.Wallet(aiPrivateKey);
+    
+    let wallet;
+    try {
+      wallet = new ethers.Wallet(aiPrivateKey);
+    } catch (e) {
+      return NextResponse.json({ 
+        approved: false, 
+        error: "Invalid AI_PRIVATE_KEY. Please check your configuration." 
+      }, { status: 500 });
+    }
 
     const completion = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
@@ -178,6 +211,8 @@ ${BLUE}================================================${NC}"
 echo -e "🎯 ${GREEN}URL:${NC} http://localhost:$FRONTEND_PORT"
 echo -e "🛡️  ${GREEN}AI Guardian Active${NC}"
 echo -e "🔐 ${GREEN}ZK-Verification Enabled${NC}"
+echo -e "🔄 ${BLUE}State Persistence Active (No Wallet Reset Needed)${NC}"
+echo -e "💡 ${BLUE}To clean state, run: ./start.sh --reset${NC}"
 echo -e "${BLUE}================================================${NC}"
 echo -e "Press ${RED}Ctrl+C${NC} to stop all services."
 

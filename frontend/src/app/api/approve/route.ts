@@ -5,9 +5,26 @@ import { ethers } from "ethers";
 export async function POST(req: Request) {
   try {
     const { txContext, userOpHash } = await req.json();
+    
+    if (!process.env.GROQ_API_KEY || process.env.GROQ_API_KEY === "YOUR_GROQ_KEY") {
+      return NextResponse.json({ 
+        approved: false, 
+        error: "GROQ_API_KEY is missing. Please set it in your environment." 
+      }, { status: 500 });
+    }
+
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-    const aiPrivateKey = process.env.AI_PRIVATE_KEY || "0xabc123abc123abc123abc123abc123abc123abc123abc123abc123abc123abcd";
-    const wallet = new ethers.Wallet(aiPrivateKey);
+    const aiPrivateKey = process.env.AI_PRIVATE_KEY || "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
+    
+    let wallet;
+    try {
+      wallet = new ethers.Wallet(aiPrivateKey);
+    } catch (e) {
+      return NextResponse.json({ 
+        approved: false, 
+        error: "Invalid AI_PRIVATE_KEY. Please check your configuration." 
+      }, { status: 500 });
+    }
 
     const completion = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
