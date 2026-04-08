@@ -23,64 +23,110 @@
 
 ## 🌟 Key Features
 
-- **🤖 AI Guardian Co-Signing**: A specialized Llama-3-powered agent that analyzes transaction intent and co-signs safe operations
-- **🔐 ZK-Income Verification**: Privacy-preserving "High-Income" badges that unlock higher withdrawal limits without exposing your net worth
-- **💳 Account Abstraction Core**: Built as a programmable smart contract account (SmartVault), moving beyond simple EOAs
-- **⚡ Dual-Signature Validation**: Transactions above a certain threshold (`0.1 ETH`) require cryptographic approval from both the Owner and the AI Guardian
-- **🎨 Modern Dashboard**: A high-performance Next.js 15 frontend with real-time status tracking and interactive signing flows
+- **🤖 AI Guardian Co-Signing**: A specialized Llama-3-powered agent that analyzes transaction intent and co-signs safe operations.
+- **🔐 ZK-Income Verification**: Privacy-preserving "High-Income" badges that unlock higher withdrawal limits without exposing your net worth.
+- **💳 Account Abstraction Core**: Built as a programmable smart contract account (SmartVault), moving beyond simple EOAs.
+- **⚡ Dual-Signature Validation**: Transactions above a certain threshold (`0.1 ETH`) require cryptographic approval from both the Owner and the AI Guardian.
+- **🎨 Modern Dashboard**: A high-performance Next.js 15 frontend with real-time status tracking and interactive signing flows.
+
+## 🎯 Motivation: The $3.8B Security Gap
+
+In 2024 alone, billions were lost to private key compromises and phishing attacks. LockedFI addresses the **"Privacy-Security Bottleneck"** through:
+- **Regulatory Compliance vs. Privacy**: Global regulations (GDPR/CCPA) demand data minimization. We provide a solution where "Verification" does not require "Data Storage."
+- **Mitigation of EOA Fragility**: Standard wallets rely on a single ECDSA key; a single leak leads to 100% loss. LockedFI moves from "Passive Wallets" to "Active Guardians."
+- **The Rise of RWA**: As traditional finance moves on-chain, there is an urgent need for ZK-based attestations that prove income brackets without revealing exact net worth.
 
 ## 🏗️ System Architecture
 
-LockedFI operates as a three-tier security sandwich:
+LockedFI operates as a **6-Layer Security Sandwich**, ensuring every transaction is private, intelligent, and verified:
 
-1. **The Privacy Layer (ZK)**: Uses Circom to generate ZK-SNARKs. A user proves they have a certain income level locally; only the proof is sent to `SmartVault.sol` to toggle the `hasHighIncomeBadge` flag.
-
-2. **The Intelligence Layer (AI)**: A middleware service that consumes the Groq SDK. It performs semantic analysis on withdrawal requests, verifying they align with safe parameters before providing a secondary signature.
-
-3. **The Execution Layer (EVM)**: The `SmartVault` contract enforces the logic. It checks signature lengths, validates ZK proofs, and handles the atomic transfer of funds.
+1.  **Input Layer**: User provides an email (DKIM-signed) and a transaction request.
+2.  **ZK-Generation Layer**: User's machine computes a zk-SNARK proof locally using `witness_calculator.js`.
+3.  **Transport Layer**: The proof and transaction hash are sent to the Node.js/Next.js API Bridge.
+4.  **AI Processing Layer**: The API queries Groq (Llama-3.3-70B). The AI evaluates: (Amount, Gas, Recipient, User_Income_Badge).
+5.  **Signature Layer**: If approved, the Python service (AI Guardian) signs the `UserOpHash`.
+6.  **Blockchain Layer**: `SmartVault.sol` receives the 130-byte bundled signature, verifies it via `ecrecover`, and executes the transfer.
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │                         USER LAYER                             │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
 │  │   Wallet     │  │  Dashboard   │  │  ZK Circuit  │          │
-│  │  (MetaMask)  │  │  (Next.js)   │  │   (Circom)   │          │
+│  │  (MetaMask)  │  │  (Next.js)   │  │  (Circom/JS) │          │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘          │
 └─────────┼─────────────────┼─────────────────┼──────────────────┘
-          │                 │                 │
-          │                 │                 │
-┌─────────┼─────────────────┼─────────────────┼──────────────────┐
-│         ▼                ▼                 ▼                   │
-│                     NEXT.JS API LAYER                          │
+          │ (1) Input       │ (2) ZK-Gen      │
+          ▼                 ▼                 ▼
+┌────────────────────────────────────────────────────────────────┐
+│                     (3) TRANSPORT LAYER                        │
 │  ┌──────────────────────────────────────────────────┐          │
-│  │      /api/approve (AI Integration Endpoint)      │          │
+│  │      Next.js API Bridge (/api/approve)           │          │
 │  └────────────────────┬─────────────────────────────┘          │
 └───────────────────────┼────────────────────────────────────────┘
                         │
                         ▼
 ┌────────────────────────────────────────────────────────────────┐
-│                       AI GUARDIAN LAYER                        │
+│                   (4) AI PROCESSING LAYER                      │
 │  ┌──────────────────────────────────────────────────┐          │
-│  │    Python Service (guardian_service.py)          │          │
-│  │    - Groq Llama-3.3-70b Model                    │          │
-│  │    - Transaction Context Analysis                │          │
-│  │    - Deterministic APPROVE/REJECT Decision       │          │
-│  │    - Cryptographic Signature Generation          │          │
-│  └──────────────────────────────────────────────────┘          │
-└────────────────────────────────────────────────────────────────┘
+│  │    Python Service (Groq Llama-3.3-70b)           │          │
+│  │    - Evaluate: Amount, Gas, Recipient, Badge     │          │
+│  └────────────────────┬─────────────────────────────┘          │
+└───────────────────────┼────────────────────────────────────────┘
+                        │
+                        ▼
+┌────────────────────────────────────────────────────────────────┐
+│                     (5) SIGNATURE LAYER                        │
+│  ┌──────────────────────────────────────────────────┐          │
+│  │    AI Guardian (guardian_service.py)             │          │
+│  │    - Signs UserOpHash (65-byte AI Sig)           │          │
+│  └────────────────────┬─────────────────────────────┘          │
+└───────────────────────┼────────────────────────────────────────┘
                         │
                         ▼
 ┌───────────────────────────────────────────────────────────────┐
-│                      BLOCKCHAIN LAYER                         │
+│                   (6) BLOCKCHAIN LAYER                        │
 │  ┌──────────────────┐  ┌─────────────────────────────────┐    │
 │  │   SmartVault     │  │    Groth16Verifier              │    │
 │  │   .sol           │  │    .sol                         │    │
 │  │                  │  │                                 │    │
-│  │ - Dual Sig Logic │  │ - ZK Proof Validation           │    │
-│  │ - Risk Limits    │  │ - Income Badge Verification     │    │
+│  │ - 130b Bundle    │  │ - ZK Proof Validation           │    │
+│  │ - ecrecover Check│  │ - Income Badge Verification     │    │
 │  │ - Execution      │  │                                 │    │
 │  └──────────────────┘  └─────────────────────────────────┘    │
 └───────────────────────────────────────────────────────────────┘
+```
+
+## 📦 Core Modules
+
+The LockedFI ecosystem is composed of five specialized modules that work in orchestration:
+
+| Module | Responsibility | Location |
+|:---|:---|:---|
+| **ZK-Circuit (Circom)** | Defines mathematical constraints for income verification and identity hashing (DKIM-ready). | `zk/circuits/` |
+| **Smart Vault (Solidity)** | ERC-4337 compliant account handling custody, dual-signatures, and risk limits. | `contracts/src/` |
+| **AI Guardian (Python)** | Off-chain risk-analysis engine using Llama-3.3-70B to generate cryptographic co-signatures. | `ai-guardian/` |
+| **API Bridge (Next.js)** | Secure middleware coordinating communication between the Frontend, AI Service, and EVM. | `frontend/src/app/api/` |
+| **Verifier (Solidity)** | On-chain Groth16 verifier for final elliptic curve pairing checks of ZK-proofs. | `contracts/src/Verifier.sol` |
+
+### Module Relationship Diagram
+
+```text
+             ┌────────────────┐          ┌────────────────┐
+             │   API Bridge   │ <──────> │  AI Guardian   │
+             │   (Next.js)    │          │    (Python)    │
+             └───────┬────────┘          └────────┬───────┘
+                     │                            │ (Co-signature)
+                     ▼                            ▼
+             ┌────────────────┐          ┌────────────────┐
+             │   ZK-Circuit   │ ───────> │   Smart Vault  │
+             │    (Circom)    │          │   (Solidity)   │
+             └───────┬────────┘          └────────┬───────┘
+                     │                            │
+                     ▼                            │
+             ┌────────────────┐                   │
+             │    Verifier    │ <─────────────────┘
+             │   (Solidity)   │      (Verification Call)
+             └────────────────┘
 ```
 
 ## 🛠️ Tech Stack

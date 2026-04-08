@@ -1,4 +1,4 @@
-export const VAULT_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
+export const VAULT_ADDRESS = "0x1fA02b2d6A771842690194Cf62D91bdd92BfE28d";
 export const VAULT_ABI = [
   "function hasHighIncomeBadge() view returns (bool)",
   "function owner() view returns (address)",

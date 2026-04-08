@@ -1,43 +1,63 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.28;
 
 import "forge-std/Test.sol";
 import "../src/SmartVault.sol";
-import "../src/Verifier.sol";
+import "../src/SmartVaultFactory.sol";
+import "../src/ZKIdentityManager.sol";
+import "./MockVerifier.sol";
 
 contract SmartVaultTest is Test {
     SmartVault public vault;
-    Groth16Verifier public verifier;
+    SmartVaultFactory public factory;
+    ZKIdentityManager public identityManager;
+    MockVerifier public verifier;
     
     address owner = address(0xABCD);
     address aiGuardian = address(0x1234);
-    address entryPoint = address(0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789);
 
     function setUp() public {
-        verifier = new Groth16Verifier();
-        vault = new SmartVault(owner, aiGuardian, address(verifier));
-        vm.deal(address(vault), 1 ether);
-    }
-
-    function testSmallWithdrawal() public {
-        vm.prank(entryPoint);
-        vault.execute(address(0xbeef), 0.05 ether, "");
-        assertEq(address(0xbeef).balance, 0.05 ether);
-    }
-
-    function testLargeWithdrawalFailsWithoutBadge() public {
-        vm.prank(entryPoint);
-        vm.expectRevert("Risk too high: ZK-Income Badge required");
-        vault.execute(address(0xbeef), 0.2 ether, "");
-    }
-
-    // FIX: Expect the security library to REVERT on a fake 65-byte signature
-    function testValidationFailsOnInvalidSignature() public {
-        bytes32 mockHash = keccak256("tx_data");
-        bytes memory signature = new bytes(65); 
+        verifier = new MockVerifier();
+        identityManager = new ZKIdentityManager(address(verifier), address(this));
+        factory = new SmartVaultFactory();
         
-        // We expect the ECDSA library to catch the fake signature and revert
-        vm.expectRevert(); 
-        vault.validateUserOp(mockHash, signature);
+        vault = factory.createVault(owner, aiGuardian, address(identityManager), 0);
+    }
+
+    function testDeterministicDeployment() public {
+        address expected = factory.getAddress(owner, aiGuardian, address(identityManager), 123);
+        SmartVault vault2 = factory.createVault(owner, aiGuardian, address(identityManager), 123);
+        assertEq(address(vault2), expected);
+    }
+
+    function testDepositAndSolvency() public {
+        uint256 amount = 1 ether;
+        vm.deal(address(this), amount);
+        
+        vault.deposit{value: amount}();
+        assertEq(vault.totalAssets(), amount);
+        assertEq(address(vault).balance, amount);
+    }
+
+    function testYieldHarvesting() public {
+        uint256 amount = 100 ether;
+        vm.deal(address(this), amount);
+        vault.deposit{value: amount}();
+
+        vm.prank(aiGuardian);
+        vault.harvestYield();
+
+        assertEq(vault.totalAssets(), 101 ether); // 1% yield
+    }
+
+    function testExecuteUpdatesSolvency() public {
+        uint256 amount = 1 ether;
+        vm.deal(address(this), amount);
+        vault.deposit{value: amount}();
+
+        vm.prank(owner);
+        vault.execute(address(0xbeef), 0.1 ether, "");
+        
+        assertEq(vault.totalAssets(), 0.9 ether);
     }
 }

@@ -1,0 +1,14 @@
+{
+  "project_name": "Autonomous Sovereign Vault",
+  "version": "1.0.0",
+  "experimental_agents": [
+    "ai-sentinel",
+    "zk-cryptographer",
+    "aa-ux-engineer"
+  ],
+  "mcp_servers": [],
+  "execution_strictness": "high",
+  "hitl_approval_required": true,
+  "virtual_env_enforcement": true,
+  "security_audit_mode": true
+}

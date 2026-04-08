@@ -9,7 +9,8 @@ load_dotenv(dotenv_path='./.env', override=True)
 
 # 1. Setup Connection to Anvil
 w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
-vault_address = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
+# Use the address from the constants or a mock one for the script
+vault_address = "0x67d269191c92Caf3cD7723F116c85e6E9bf55933"
 
 # 2. Identities
 owner_pv_key = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
@@ -27,26 +28,70 @@ bundled_sig = owner_sig + ai_sig
 print(f"Bundled Signature Generated: {bundled_sig.hex()[:20]}...")
 
 # 5. Call the Smart Contract to verify
-# We use 'call' because validateUserOp is a view function in our contract
+# Standardized ERC-4337 v0.6 ABI
 vault_abi = [
     {
         "inputs": [
+            {
+                "components": [
+                    {"internalType": "address", "name": "sender", "type": "address"},
+                    {"internalType": "uint256", "name": "nonce", "type": "uint256"},
+                    {"internalType": "bytes", "name": "initCode", "type": "bytes"},
+                    {"internalType": "bytes", "name": "callData", "type": "bytes"},
+                    {"internalType": "uint256", "name": "callGasLimit", "type": "uint256"},
+                    {"internalType": "uint256", "name": "verificationGasLimit", "type": "uint256"},
+                    {"internalType": "uint256", "name": "preVerificationGas", "type": "uint256"},
+                    {"internalType": "uint256", "name": "maxFeePerGas", "type": "uint256"},
+                    {"internalType": "uint256", "name": "maxPriorityFeePerGas", "type": "uint256"},
+                    {"internalType": "bytes", "name": "paymasterAndData", "type": "bytes"},
+                    {"internalType": "bytes", "name": "signature", "type": "bytes"}
+                ],
+                "internalType": "struct UserOperation",
+                "name": "userOp",
+                "type": "tuple"
+            },
             {"internalType": "bytes32", "name": "userOpHash", "type": "bytes32"},
-            {"internalType": "bytes", "name": "signature", "type": "bytes"}
+            {"internalType": "uint256", "name": "missingAccountFunds", "type": "uint256"}
         ],
         "name": "validateUserOp",
         "outputs": [{"internalType": "uint256", "name": "validationData", "type": "uint256"}],
-        "stateMutability": "view",
+        "stateMutability": "nonpayable",
         "type": "function"
     }
 ]
 
 vault_contract = w3.eth.contract(address=vault_address, abi=vault_abi)
 
-print("Sending signature to Smart Vault for verification...")
-result = vault_contract.functions.validateUserOp(mock_user_op_hash, bundled_sig).call()
+# Mock UserOperation
+mock_user_op = {
+    "sender": vault_address,
+    "nonce": 0,
+    "initCode": b"",
+    "callData": b"",
+    "callGasLimit": 0,
+    "verificationGasLimit": 0,
+    "preVerificationGas": 0,
+    "maxFeePerGas": 0,
+    "maxPriorityFeePerGas": 0,
+    "paymasterAndData": b"",
+    "signature": bundled_sig
+}
 
-if result == 0:
-    print("✅ SUCCESS: The Smart Vault accepted the AI-Co-signed transaction!")
-else:
-    print("❌ FAILED: The Smart Vault rejected the signature.")
+# EntryPoint address to impersonate for the call
+entry_point = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"
+
+print("Simulating signature verification via Smart Vault...")
+try:
+    # Use call to simulate as we only want to verify the logic
+    result = vault_contract.functions.validateUserOp(
+        mock_user_op, 
+        mock_user_op_hash, 
+        0
+    ).call({'from': entry_point})
+
+    if result == 0:
+        print("✅ SUCCESS: The Smart Vault accepted the AI-Co-signed transaction!")
+    else:
+        print(f"❌ FAILED: The Smart Vault rejected the signature (Result: {result}).")
+except Exception as e:
+    print(f"❌ ERROR: Transaction simulation failed: {e}")

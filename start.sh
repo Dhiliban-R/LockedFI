@@ -55,9 +55,17 @@ check_cmd() {
 check_cmd forge
 check_cmd anvil
 check_cmd npm
+check_cmd node
+check_cmd cast
 check_cmd python3
 
 echo -e "${GREEN}✅ All system dependencies found.${NC}"
+
+# Check for GROQ_API_KEY
+if [[ -z "$GROQ_API_KEY" ]] || [[ "$GROQ_API_KEY" == "YOUR_GROQ_KEY" ]]; then
+    echo -e "${RED}⚠️  Warning: GROQ_API_KEY is not set. AI Guardian functionality will be limited.${NC}"
+    echo -e "${RED}   You can set it with: export GROQ_API_KEY=your_key_here${NC}"
+fi
 
 # 2. Package Installation
 echo -e "
@@ -110,16 +118,26 @@ AI_ADDR="0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
 GROQ_KEY="${GROQ_API_KEY:-YOUR_GROQ_KEY}"
 
 cd "$PROJECT_ROOT/contracts"
+echo "Compiling smart contracts..."
+forge build --silent
+echo -e "${GREEN}✅ Compilation complete.${NC}"
 
-# Deploy Verifier
-V_OUTPUT=$(forge create --rpc-url $RPC_URL --private-key $PRIV_KEY --broadcast src/Verifier.sol:Groth16Verifier 2>/dev/null)
+# Deploy Verifier (Mock for Demo)
+echo "Deploying Mock Verifier..."
+V_OUTPUT=$(forge create --rpc-url $RPC_URL --private-key $PRIV_KEY --broadcast test/MockVerifier.sol:MockVerifier 2>/dev/null)
 V_ADDR=$(echo "$V_OUTPUT" | grep "Deployed to:" | awk '{print $3}')
+echo -e "${GREEN}✅ Mock Verifier Deployed: $V_ADDR${NC}"
+
+# Deploy ZK Identity Manager
+echo "Deploying ZK Identity Manager..."
+ID_OUTPUT=$(forge create --rpc-url $RPC_URL --private-key $PRIV_KEY --broadcast src/ZKIdentityManager.sol:ZKIdentityManager --constructor-args $V_ADDR $OWNER 2>/dev/null)
+ID_ADDR=$(echo "$ID_OUTPUT" | grep "Deployed to:" | awk '{print $3}')
+echo -e "${GREEN}✅ Identity Manager Deployed: $ID_ADDR${NC}"
 
 # Deploy Smart Vault
-VAULT_OUTPUT=$(forge create --rpc-url $RPC_URL --private-key $PRIV_KEY --broadcast src/SmartVault.sol:SmartVault --constructor-args $OWNER $AI_ADDR $V_ADDR 2>/dev/null)
+echo "Deploying Smart Vault..."
+VAULT_OUTPUT=$(forge create --rpc-url $RPC_URL --private-key $PRIV_KEY --broadcast src/SmartVault.sol:SmartVault --constructor-args $OWNER $AI_ADDR $ID_ADDR 2>/dev/null)
 VAULT_ADDR=$(echo "$VAULT_OUTPUT" | grep "Deployed to:" | awk '{print $3}')
-
-echo -e "${GREEN}✅ Verifier Deployed: $V_ADDR${NC}"
 echo -e "${GREEN}✅ Smart Vault Deployed: $VAULT_ADDR${NC}"
 
 # Update Frontend Config
@@ -193,9 +211,12 @@ echo -e "${GREEN}✅ Constants and API Routes updated.${NC}"
 echo -e "
 ${BLUE}Step 6: Initializing Vault State...${NC}"
 # Grant high income badge for the demo
-cast send --rpc-url $RPC_URL --private-key $PRIV_KEY $VAULT_ADDR "verifyIncome(uint256[2],uint256[2][2],uint256[2],uint256[2])" "[0,0]" "[[0,0],[0,0]]" "[0,0]" "[0,0]" > /dev/null 2>&1
+echo "Granting ZK-Income Badge..."
+cast send --rpc-url $RPC_URL --private-key $PRIV_KEY $VAULT_ADDR "verifyIncome(uint256[2],uint256[2][2],uint256[2],uint256[2])" "[0,0]" "[[0,0],[0,0]]" "[0,0]" "[1,1]" --silent
+
 # Fund the vault with 1 ETH
-cast send --rpc-url $RPC_URL --private-key $PRIV_KEY $VAULT_ADDR --value 1ether > /dev/null 2>&1
+echo "Funding Vault with 1 ETH..."
+cast send --rpc-url $RPC_URL --private-key $PRIV_KEY $VAULT_ADDR "deposit()" --value 1ether --silent
 
 echo -e "${GREEN}✅ Vault funded and Badge granted.${NC}"
 

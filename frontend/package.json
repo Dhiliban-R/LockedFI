@@ -12,6 +12,7 @@
     "ethers": "^6.16.0",
     "groq-sdk": "^0.37.0",
     "lucide-react": "^0.575.0",
+    "snarkjs": "^0.7.6",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3"

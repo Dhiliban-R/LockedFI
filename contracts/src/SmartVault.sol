@@ -3,67 +3,138 @@ pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-interface IVerifier {
-    function verifyProof(uint[2] calldata a, uint[2][2] calldata b, uint[2] calldata c, uint[2] calldata input) external view returns (bool);
+interface IZKIdentityManager {
+    function hasBadge(address user) external view returns (bool);
+    function verifyIdentity(
+        address user,
+        bytes32 nullifier,
+        uint[2] calldata a,
+        uint[2][2] calldata b,
+        uint[2] calldata c,
+        uint[2] calldata input
+    ) external;
 }
 
-contract SmartVault {
+/**
+ * @dev SmartVault manages assets and enforces ZK-Identity checks.
+ */
+contract SmartVault is Pausable, Ownable, ReentrancyGuard {
     using ECDSA for bytes32;
 
-    address public owner;
-    address public aiGuardian; // The address our Python AI service will use
-    address public verifier; 
+    address public aiGuardian; 
+    address public identityManager; 
 
-    uint256 public constant RISK_LIMIT = 0.1 ether; // Any tx above this needs AI approval
-    bool public hasHighIncomeBadge;
+    uint256 public constant RISK_LIMIT = 0.1 ether; 
+    uint256 public totalAssets; 
 
-    constructor(address _owner, address _aiGuardian, address _verifier) {
-        owner = _owner;
+    event Deposit(address indexed user, uint256 amount);
+    event Withdrawal(address indexed user, address indexed to, uint256 amount);
+    event YieldGenerated(uint256 amount);
+    event CrossChainTransferInitiated(uint32 indexed dstChainId, address indexed to, uint256 amount);
+
+    constructor(address _owner, address _aiGuardian, address _identityManager) Ownable(_owner) {
         aiGuardian = _aiGuardian;
-        verifier = _verifier;
+        identityManager = _identityManager;
     }
 
-    function verifyIncome(uint[2] calldata a, uint[2][2] calldata b, uint[2] calldata c, uint[2] calldata input) external {
-        // require(IVerifier(verifier).verifyProof(a, b, c, input), "Invalid Income Proof");
-        hasHighIncomeBadge = true;
+    /**
+     * @dev Deposit ETH into the vault and earn yield.
+     */
+    function deposit() external payable whenNotPaused {
+        totalAssets += msg.value;
+        emit Deposit(msg.sender, msg.value);
     }
 
-    // ERC-4337 Validation Logic with AI Co-signing
-    function validateUserOp(bytes32 userOpHash, bytes calldata signature) 
-        external 
-        view 
-        returns (uint256 validationData) 
-    {
-        bytes32 ethSignedHash = MessageHashUtils.toEthSignedMessageHash(userOpHash);
-        
-        // The signature will now be 130 bytes (65 bytes for Owner + 65 bytes for AI)
-        if (signature.length == 65) {
-            // Only Owner Signature provided
-            address signer = ethSignedHash.recover(signature);
-            if (signer != owner) return 1;
-            return 0; 
-        } else if (signature.length == 130) {
-            // Dual Signature (Owner + AI)
-            bytes memory ownerSig = signature[0:65];
-            bytes memory aiSig = signature[65:130];
-            
-            address ownerSigner = ethSignedHash.recover(ownerSig);
-            address aiSigner = ethSignedHash.recover(aiSig);
-            
-            if (ownerSigner != owner || aiSigner != aiGuardian) return 1;
-            return 0;
+    /**
+     * @dev Simple yield logic: simulate yield accrual (for demo).
+     */
+    function harvestYield() external onlyGuardian nonReentrant {
+        uint256 yield = totalAssets / 100; // 1% yield simulation
+        totalAssets += yield;
+        emit YieldGenerated(yield);
+    }
+
+    /**
+     * @dev Initiate a cross-chain transfer (Bridge-Ready).
+     * @param dstChainId The destination chain ID (LayerZero format).
+     * @param to The recipient address on the destination chain.
+     * @param amount The amount to transfer.
+     */
+    function initiateCrossChainTransfer(uint32 dstChainId, address to, uint256 amount) external onlyOwner whenNotPaused nonReentrant {
+        require(address(this).balance >= amount, "Insufficient balance");
+
+        // Safeguard totalAssets from underflow (Accounting correction)
+        if (totalAssets < amount) {
+            totalAssets = 0;
+        } else {
+            totalAssets -= amount;
         }
         
-        return 1;
+        // In production, this would call LayerZero Endpoint or CCIP Router
+        // For this architecture, we emit an event for the bridge relayer
+        emit CrossChainTransferInitiated(dstChainId, to, amount);
+        
+        // Burn or lock assets
+        payable(address(0xdead)).transfer(amount); // Simulation: "Lock" by sending to dead address
     }
 
-    function execute(address dest, uint256 value, bytes calldata func) external {
+    modifier onlyGuardian() {
+        require(msg.sender == aiGuardian, "Only AI Guardian");
+        _;
+    }
+
+    function pause() external onlyGuardian {
+        _pause();
+    }
+
+    function unpause() external onlyOwner {
+        _unpause();
+    }
+
+    function setAIGuardian(address _newGuardian) external onlyOwner {
+        aiGuardian = _newGuardian;
+    }
+
+    /**
+     * @dev Check if the owner has a high income badge.
+     */
+    function hasHighIncomeBadge() external view returns (bool) {
+        return IZKIdentityManager(identityManager).hasBadge(owner());
+    }
+
+    /**
+     * @dev Verify a ZK-Proof to grant a high income badge.
+     */
+    function verifyIncome(
+        uint[2] calldata a,
+        uint[2][2] calldata b,
+        uint[2] calldata c,
+        uint[2] calldata input
+    ) external {
+        // Use a deterministic nullifier for the demo based on owner address
+        bytes32 nullifier = keccak256(abi.encodePacked(owner(), "income-nullifier"));
+        IZKIdentityManager(identityManager).verifyIdentity(owner(), nullifier, a, b, c, input);
+    }
+
+    function execute(address dest, uint256 value, bytes calldata func) external whenNotPaused nonReentrant {
         // ALLOW EITHER THE ENTRYPOINT OR THE OWNER TO CALL THIS FOR THE DEMO
-        require(msg.sender == address(0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789) || msg.sender == owner, "Only EntryPoint or Owner");
+        require(msg.sender == address(0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789) || msg.sender == owner(), "Only EntryPoint or Owner");
 
         if (value > RISK_LIMIT) {
-            require(hasHighIncomeBadge, "Risk too high: ZK-Income Badge required");
+            require(IZKIdentityManager(identityManager).hasBadge(owner()), "Risk too high: ZK-Income Badge required");
+        }
+
+        require(address(this).balance >= value, "Insufficient vault balance");
+        
+        // Safeguard totalAssets from underflow (Accounting correction)
+        if (totalAssets < value) {
+            totalAssets = 0;
+        } else {
+            totalAssets -= value;
         }
 
         // Check if destination is a contract or EOA
@@ -85,7 +156,11 @@ contract SmartVault {
             // If func data is provided but dest is EOA, we can't execute it
             // This is expected behavior for simple ETH transfers
         }
+
+        emit Withdrawal(msg.sender, dest, value);
     }
 
-    receive() external payable {}
+    receive() external payable {
+        totalAssets += msg.value;
+    }
 }
